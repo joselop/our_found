@@ -1270,7 +1270,7 @@ function startAnimation(transactions) {
     drawAurora(ctx,w,h,f/FPS+idx*10);
 
     // Speed lines on entry
-    if(f<30)drawSpeedLines(ctx,w,h,(1-f/30)*0.8,col);
+    if(f<45)drawSpeedLines(ctx,w,h,(1-f/45)*1.05,col);
 
     // Header
     const hdrS=Math.min(22,w*0.015);
@@ -1293,7 +1293,35 @@ function startAnimation(transactions) {
     ctx.globalAlpha=1;
 
     // Date
-    if(f>10){const a=Math.min(1,(f-10)/20);const fs=Math.min(15,w*0.011);glowText(ctx,tx.date,w/2,h*0.13,`${fs}px Consolas,monospace`,GRAY,a,0.2);}
+    if(f>8){
+      const a=Math.min(1,(f-8)/20);
+      const dateY=h*0.13;
+      const dateW=Math.min(380,w*0.62),dateH=Math.min(52,h*0.07);
+      const x=w/2-dateW/2,y=dateY-dateH/2;
+
+      // Date plate for stronger visual hierarchy
+      ctx.globalAlpha=0.18*a;ctx.fillStyle='#0c1026';
+      ctx.fillRect(x,y,dateW,dateH);
+      ctx.globalAlpha=0.28*a;ctx.strokeStyle=col;ctx.lineWidth=1.5;
+      ctx.strokeRect(x,y,dateW,dateH);
+
+      // Corner accents
+      ctx.globalAlpha=0.8*a;ctx.strokeStyle=col;ctx.lineWidth=2;
+      const cL=14;
+      ctx.beginPath();
+      ctx.moveTo(x+4,y+4+cL);ctx.lineTo(x+4,y+4);ctx.lineTo(x+4+cL,y+4);
+      ctx.moveTo(x+dateW-4-cL,y+4);ctx.lineTo(x+dateW-4,y+4);ctx.lineTo(x+dateW-4,y+4+cL);
+      ctx.moveTo(x+4,y+dateH-4-cL);ctx.lineTo(x+4,y+dateH-4);ctx.lineTo(x+4+cL,y+dateH-4);
+      ctx.moveTo(x+dateW-4-cL,y+dateH-4);ctx.lineTo(x+dateW-4,y+dateH-4);ctx.lineTo(x+dateW-4,y+dateH-4-cL);
+      ctx.stroke();ctx.globalAlpha=1;
+
+      const fs=Math.min(30,w*0.022);
+      glowText(ctx,`[ ${tx.date} ]`,w/2,dateY,`bold ${fs}px Orbitron,Consolas,monospace`,colL,a,0.75);
+      if(f<75){
+        const fi=Math.min(0.65,(f-8)/40)*(0.55+0.35*Math.sin(f*0.12));
+        drawLensFlare(ctx,w/2,dateY,fi,col);
+      }
+    }
 
     // Name
     if(f>20){
