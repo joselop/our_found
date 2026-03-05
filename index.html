@@ -453,10 +453,57 @@ const dropZone = document.getElementById('drop-zone');
 const fileInput = document.getElementById('file-input');
 const autoloadBtn = document.getElementById('autoload-btn');
 let animationStarted = false;
+const MUSIC_FILES = ['bgm.mp3', 'music.mp3', 'soundtrack.mp3'];
+let bgMusic = null;
+let musicStarted = false;
+let userInteracted = false;
+
+async function setupBackgroundMusic() {
+  for (const file of MUSIC_FILES) {
+    try {
+      const res = await fetch(`${file}?ts=${Date.now()}`, { method: 'HEAD', cache: 'no-store' });
+      if (!res.ok) continue;
+      bgMusic = new Audio(file);
+      bgMusic.loop = true;
+      bgMusic.volume = 0.32;
+      bgMusic.preload = 'auto';
+      tryStartBackgroundMusic();
+      console.log(`Background music ready: ${file}`);
+      return;
+    } catch (_) {
+      // Try the next filename.
+    }
+  }
+  console.log('No background MP3 found. Add bgm.mp3 (or music.mp3 / soundtrack.mp3) to the same folder.');
+}
+
+function tryStartBackgroundMusic() {
+  if (!bgMusic || musicStarted) return;
+  const playPromise = bgMusic.play();
+  if (!playPromise || typeof playPromise.then !== 'function') {
+    musicStarted = true;
+    return;
+  }
+  playPromise.then(() => {
+    musicStarted = true;
+  }).catch(() => {
+    // Browser blocked autoplay; it will start on the next user gesture.
+  });
+}
 
 dropZone.setAttribute('tabindex', '0');
 dropZone.setAttribute('role', 'button');
 dropZone.setAttribute('aria-label', 'Open CSV file picker');
+setupBackgroundMusic();
+
+function onFirstInteraction() {
+  if (!userInteracted) userInteracted = true;
+  tryStartBackgroundMusic();
+}
+
+addEventListener('pointerdown', onFirstInteraction, { passive: true });
+addEventListener('touchstart', onFirstInteraction, { passive: true });
+addEventListener('keydown', onFirstInteraction);
 
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
@@ -475,6 +522,7 @@ if (autoloadBtn) autoloadBtn.addEventListener('click', autoLoadDefaultCSV);
 
 function beginExperience(tx) {
   if (animationStarted) return;
+  tryStartBackgroundMusic();
   animationStarted = true;
   document.getElementById('loader').classList.add('hidden');
   setTimeout(() => document.getElementById('loader').style.display = 'none', 1200);
