@@ -421,7 +421,7 @@
       <div id="drop-zone" onclick="document.getElementById('file-input').click()">
         <div class="icon">[[]]</div>
         <div class="main-text">Drop your CSV or click to browse</div>
-        <div class="sub-text">Primary source: <strong>fondo.csv</strong></div>
+        <div class="sub-text">Primary source: <strong>fondo.csv</strong> and optional rounds file <strong>active_members.csv</strong></div>
       </div>
 
       <input type="file" id="file-input" accept=".csv,.txt">
@@ -431,13 +431,17 @@
       </div>
 
       <div id="csv-format">
-        Expected format (semicolon or comma separated):<br>
+        Expected format for <strong>fondo.csv</strong> (semicolon or comma separated):<br>
         <span>Date;Who;Amount;Total</span><br>
         19/02/2026;Mohammad;10;10<br>
-        19/02/2026;Expense;-22.4;-2.4
+        19/02/2026;Expense;-22.4;-2.4<br><br>
+        Expected format for <strong>active_members.csv</strong>:<br>
+        <span>Who;JoinRound</span><br>
+        Mohammad;1<br>
+        Gahong;2
       </div>
 
-      <div class="loader-micro">Tip: Press Enter on the drop zone to open file picker.</div>
+      <div class="loader-micro">Tip: Press Enter on the drop zone to open file picker. Hosted mode auto-loads both CSV files.</div>
     </div>
   </section>
 </div>
@@ -454,9 +458,12 @@ const fileInput = document.getElementById('file-input');
 const autoloadBtn = document.getElementById('autoload-btn');
 let animationStarted = false;
 const MUSIC_FILES = ['bgm.mp3', 'music.mp3', 'soundtrack.mp3'];
+const ACTIVE_MEMBER_FILES = ['active_members.csv', 'miembros_activos.csv', 'usuarios_activos.csv'];
 let bgMusic = null;
 let musicStarted = false;
 let userInteracted = false;
+let activeMembersData = [];
+let activeMembersSource = null;
 
 async function setupBackgroundMusic() {
   for (const file of MUSIC_FILES) {
@@ -526,15 +533,16 @@ function beginExperience(tx) {
   animationStarted = true;
   document.getElementById('loader').classList.add('hidden');
   setTimeout(() => document.getElementById('loader').style.display = 'none', 1200);
-  startAnimation(tx);
+  startAnimation(tx, activeMembersData);
 }
 
 function handleFile(file) {
   if (animationStarted) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const tx = parseCSV(e.target.result);
     if (!tx.length) { alert('No valid rows found in CSV.'); return; }
+    if (location.protocol !== 'file:') await loadActiveMembersCSV();
     beginExperience(tx);
   };
   reader.readAsText(file);
@@ -557,6 +565,55 @@ function parseCSV(text) {
   return result;
 }
 
+function normalizeName(name) {
+  return String(name || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function parseActiveMembersCSV(text) {
+  const lines = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/);
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    let parts = line.split(';');
+    if (parts.length < 2) parts = line.split(',');
+    if (parts.length < 2) continue;
+
+    const who = parts[0].trim();
+    const joinRound = parseInt(parts[1].trim(), 10);
+    const isActive = parts[2] == null ? true : !/^(0|false|inactive|no)$/i.test(parts[2].trim());
+
+    if (!who || !Number.isFinite(joinRound) || joinRound < 1 || !isActive) continue;
+    result.push({ who, joinRound, key: normalizeName(who) });
+  }
+  return result;
+}
+
+async function loadActiveMembersCSV() {
+  for (const file of ACTIVE_MEMBER_FILES) {
+    try {
+      const response = await fetch(`${file}?ts=${Date.now()}`, { cache: 'no-store' });
+      if (!response.ok) continue;
+      const text = await response.text();
+      const parsed = parseActiveMembersCSV(text);
+      if (!parsed.length) continue;
+      activeMembersData = parsed;
+      activeMembersSource = file;
+      console.log(`Active members loaded from ${file}`);
+      return parsed;
+    } catch (_) {
+      // Try next filename.
+    }
+  }
+  activeMembersData = [];
+  activeMembersSource = null;
+  return [];
+}
+
 async function autoLoadDefaultCSV() {
   if (animationStarted) return;
   if (autoloadBtn) {
@@ -564,7 +621,10 @@ async function autoLoadDefaultCSV() {
     autoloadBtn.textContent = 'Loading...';
   }
   try {
-    const response = await fetch(`fondo.csv?ts=${Date.now()}`, { cache: 'no-store' });
+    const [response] = await Promise.all([
+      fetch(`fondo.csv?ts=${Date.now()}`, { cache: 'no-store' }),
+      loadActiveMembersCSV()
+    ]);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
     const tx = parseCSV(text);
@@ -734,6 +794,7 @@ const INTRO_FRAMES  = 260;
 const TX_FRAMES     = 200;
 const TX_GAP        = 35;
 const OUTRO_FRAMES  = 480;
+const ROUND_AMOUNT  = 10;
 
 const BG='#020208',GOLD='#FFD700',GOLD_LIGHT='#FFEC80',GOLD_DIM='#B8860B';
 const RED='#FF2020',RED_LIGHT='#FF7777',RED_DIM='#6B0000';
@@ -1173,11 +1234,114 @@ function drawChart(ctx,totalsShown,labels,W,H){
   ctx.globalAlpha=1;
 }
 
+function computeFundingStatus(transactions,activeMembers){
+  if(!activeMembers||!activeMembers.length)return null;
+
+  const paidByKey=new Map();
+  for(const tx of transactions){
+    if(tx.amount<=0)continue;
+    const key=normalizeName(tx.who);
+    paidByKey.set(key,(paidByKey.get(key)||0)+tx.amount);
+  }
+
+  const rows=activeMembers.map(member=>{
+    const paid=paidByKey.get(member.key)||0;
+    const paidRounds=Math.floor((paid+0.001)/ROUND_AMOUNT);
+    return {
+      who:member.who,
+      joinRound:member.joinRound,
+      paid,
+      paidRounds,
+      effectiveRound:member.joinRound+paidRounds-1
+    };
+  });
+
+  const maxPotentialRound=Math.max(0,...rows.map(row=>row.effectiveRound));
+  let currentRound=0;
+  for(let round=1;round<=maxPotentialRound;round++){
+    const fullyCovered=rows.every(row=>row.paid+0.001>=Math.max(0,(round-row.joinRound+1)*ROUND_AMOUNT));
+    if(fullyCovered)currentRound=round;
+  }
+
+  for(const row of rows){
+    row.expectedPaid=Math.max(0,(currentRound-row.joinRound+1)*ROUND_AMOUNT);
+    row.delta=row.paid-row.expectedPaid;
+    row.deltaRounds=row.delta/ROUND_AMOUNT;
+  }
+
+  const ahead=rows.filter(row=>row.delta>0.01).sort((a,b)=>b.delta-a.delta||a.who.localeCompare(b.who));
+  const behind=rows.filter(row=>row.delta<-0.01).sort((a,b)=>a.delta-b.delta||a.who.localeCompare(b.who));
+  const synced=rows.filter(row=>Math.abs(row.delta)<=0.01);
+
+  return { currentRound, rows, ahead, behind, synced, source: activeMembersSource };
+}
+
+function drawFundingStatusPanel(ctx,summary,W,H,alpha){
+  if(!summary){
+    ctx.globalAlpha=alpha*0.7;
+    glowText(ctx,"Add active_members.csv to show round balances",W/2,H*0.55,`bold ${Math.min(20,W*0.016)}px 'Rajdhani',sans-serif`,CYAN,alpha,0.35);
+    ctx.globalAlpha=1;
+    return;
+  }
+
+  const titleSize=Math.min(22,W*0.017);
+  const metaSize=Math.min(14,W*0.011);
+  glowText(ctx,`ROUND STATUS  |  R${summary.currentRound}`,W/2,H*0.52,`bold ${titleSize}px Orbitron,Consolas,monospace`,CYAN,alpha,0.45);
+  glowText(ctx,`${summary.synced.length} aligned | ${summary.ahead.length} ahead | ${summary.behind.length} pending`,W/2,H*0.555,`${metaSize}px 'Rajdhani',sans-serif`,GRAY,alpha*0.9,0.15);
+
+  const panelY=H*0.585;
+  const panelH=Math.min(140,H*0.17);
+  const gap=W*0.03;
+  const panelW=Math.min(360,W*0.34);
+  const leftX=W/2-gap/2-panelW;
+  const rightX=W/2+gap/2;
+
+  function drawPanel(x,y,w,h,title,color,rows,emptyText){
+    ctx.globalAlpha=alpha*0.88;ctx.fillStyle='#090d1f';ctx.strokeStyle=color;ctx.lineWidth=1.5;
+    ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);
+    ctx.globalAlpha=alpha;
+    glowText(ctx,title,x+w/2,y+18,`bold ${Math.min(16,W*0.012)}px Orbitron,Consolas,monospace`,color,alpha,0.35);
+
+    const rowY=y+38;
+    const rowH=22;
+    const visible=rows.slice(0,4);
+    if(!visible.length){
+      ctx.font=`${Math.min(15,W*0.011)}px 'Rajdhani',sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle=GRAY;ctx.globalAlpha=alpha*0.9;
+      ctx.fillText(emptyText,x+w/2,y+h/2+8);ctx.globalAlpha=1;
+      return;
+    }
+
+    visible.forEach((row,index)=>{
+      const yy=rowY+index*rowH;
+      ctx.globalAlpha=alpha*(0.08+(index%2)*0.03);ctx.fillStyle='#ffffff';
+      ctx.fillRect(x+10,yy-10,w-20,18);
+      ctx.globalAlpha=alpha;ctx.textAlign='left';ctx.textBaseline='middle';
+      ctx.font=`bold ${Math.min(16,W*0.012)}px 'Rajdhani',sans-serif`;ctx.fillStyle='#F7F0E0';
+      ctx.fillText(row.who,x+18,yy);
+      ctx.textAlign='right';ctx.font=`${Math.min(13,W*0.01)}px Orbitron,Consolas,monospace`;ctx.fillStyle=color;
+      const rounds=Math.abs(row.deltaRounds);
+      ctx.fillText(`${row.delta>0?'+':'-'}${Math.abs(row.delta).toFixed(0)} CHF  |  ${rounds.toFixed(rounds % 1 ? 1 : 0)}R`,x+w-18,yy);
+    });
+
+    if(rows.length>visible.length){
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font=`${Math.min(12,W*0.009)}px Orbitron,Consolas,monospace`;ctx.fillStyle=GRAY;ctx.globalAlpha=alpha*0.85;
+      ctx.fillText(`+ ${rows.length-visible.length} more`,x+w/2,y+h-12);ctx.globalAlpha=1;
+    }
+  }
+
+  drawPanel(leftX,panelY,panelW,panelH,'AHEAD',GREEN,summary.ahead,'Nobody is ahead');
+  drawPanel(rightX,panelY,panelW,panelH,'TO PAY',RED,summary.behind,'Nobody owes right now');
+
+}
+
 // ═══════════════════════════════════════════════════════════════
 //              M A I N   A N I M A T I O N
 // ═══════════════════════════════════════════════════════════════
 
-function startAnimation(transactions) {
+function startAnimation(transactions,activeMembers=[]) {
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
   const audio = new EpicAudio();
@@ -1190,6 +1354,7 @@ function startAnimation(transactions) {
   const particles=new ParticleSystem();
   const stars=new StarField(350,2560,1440);
   let shockwaves=[],lightnings=[],achievements=[];
+  const fundingSummary=computeFundingStatus(transactions,activeMembers);
 
   let curTx=-1,displayTotal=0,targetTotal=0,totalsShown=[0],chartLabels=['START'];
   let shake=0,flash=0,flashColor=RED,zoom=1,targetZoom=1;
@@ -1455,19 +1620,10 @@ function startAnimation(transactions) {
     if(f>200){const a=Math.min(1,(f-200)/55);const fs=Math.min(32,w*0.024);const pulse=1+0.25*Math.sin(f*0.04);
       glowText(ctx,"THE FUND KEEPS GROWING",w/2,h*0.46,`bold ${fs}px 'Rajdhani',sans-serif`,GREEN,a,0.8*pulse);}
 
-    // Contributors with stagger
-    if(f>270){
-      const names=[...new Set(transactions.filter(t=>t.amount>0).map(t=>t.who))];
-      const fs=Math.min(19,w*0.014);
-      const totalW=names.length*110;const startX=w/2-totalW/2+55;
-      names.forEach((name,i)=>{
-        const delay=i*10;const na=Math.min(1,Math.max(0,(f-270-delay)/35));
-        const nc=[GOLD,CYAN,GREEN,MAGENTA,GOLD_LIGHT,'#FF6600'][i%6];
-        const x=startX+i*(totalW/names.length);
-        // Bounce in
-        const bounceY=h*0.54-easeElastic(na)*0;
-        glowText(ctx,name,x,h*0.54,`bold ${fs}px 'Rajdhani',sans-serif`,nc,na*0.85,0.5);
-      });
+    // Funding round status
+    if(f>250){
+      const a=Math.min(1,(f-250)/45);
+      drawFundingStatusPanel(ctx,fundingSummary,w,h,a);
     }
 
     // Confetti waves
@@ -1502,7 +1658,7 @@ function startAnimation(transactions) {
     if(f>400){const a=Math.min(0.5,(f-400)/60);const fs=Math.min(13,w*0.009);
       ctx.font=`italic ${fs}px 'Rajdhani',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle=GRAY;ctx.globalAlpha=a;
-      ctx.fillText('Update fondo.csv with new rows and reload to continue the saga...',w/2,h*0.62);ctx.globalAlpha=1;}
+      ctx.fillText('Update fondo.csv and active_members.csv, then reload to continue the saga...',w/2,h*0.69);ctx.globalAlpha=1;}
   }
 
   // ────────────────────────── MAIN LOOP ──────────────────────────
