@@ -460,7 +460,7 @@
 <div id="vignette"></div>
 <div class="letterbox top" id="lb-top"></div>
 <div class="letterbox bottom" id="lb-bottom"></div>
-<button id="speed-boost" type="button" aria-label="Hold to play at double speed">Hold x2</button>
+<button id="speed-boost" type="button" aria-label="Hold to play at triple speed">Hold x3</button>
 
 <!-- CSV Loader -->
 <div id="loader">
@@ -564,7 +564,7 @@ function syncBackgroundMusicSpeed() {
 }
 
 function setBoostSpeed(active) {
-  simulationSpeed = active ? 2 : 1;
+  simulationSpeed = active ? 3 : 1;
   syncBackgroundMusicSpeed();
   if (speedBoostBtn) speedBoostBtn.classList.toggle('active', active);
 }
@@ -1231,10 +1231,11 @@ class Achievement {
   update(dt){this.life-=dt}
   draw(ctx,W,H){
     if(this.life<=0)return;
+    const textScale=W<700?1.28:W<980?1.12:1;
     const enterP=easeBack(clamp01((this.maxLife-this.life)/0.6));
     const exitP=this.life<0.8?easeIn(this.life/0.8):1;
     const alpha=enterP*exitP;
-    const y=H*0.12;const boxW=400,boxH=65;const x=W/2-boxW/2;
+    const y=H*0.12;const boxW=Math.min(440,W*0.84),boxH=72*textScale;const x=W/2-boxW/2;
 
     ctx.globalAlpha=alpha*0.9;ctx.fillStyle='#080820';ctx.strokeStyle=this.color;ctx.lineWidth=2;
     const r=14;
@@ -1245,10 +1246,10 @@ class Achievement {
     ctx.closePath();ctx.fill();
     ctx.shadowColor=this.color;ctx.shadowBlur=20;ctx.stroke();ctx.shadowBlur=0;
 
-    ctx.globalAlpha=alpha;ctx.font='bold 24px sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.globalAlpha=alpha;ctx.font=`bold ${24*textScale}px sans-serif`;ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.fillStyle=this.color;ctx.fillText(this.icon,x+18,y+boxH/2);
-    ctx.font='bold 15px "Segoe UI",sans-serif';ctx.fillText(this.text,x+55,y+24);
-    ctx.font='12px "Segoe UI",sans-serif';ctx.fillStyle=GRAY;ctx.fillText(this.subtext,x+55,y+44);
+    ctx.font=`bold ${15*textScale}px "Segoe UI",sans-serif`;ctx.fillText(this.text,x+55,y+24*textScale);
+    ctx.font=`${12*textScale}px "Segoe UI",sans-serif`;ctx.fillStyle=GRAY;ctx.fillText(this.subtext,x+55,y+46*textScale);
     ctx.textAlign='center';ctx.globalAlpha=1;
   }
 }
@@ -1258,6 +1259,7 @@ class Achievement {
 // ═══════════════════════════════════════════════════════════════
 
 function drawChart(ctx,totalsShown,labels,W,H){
+  const textScale=W<700?1.34:W<980?1.14:1;
   const cX=W*0.10,cY=H*0.72,cW=W*0.80,cH=H*0.22;
 
   // Panel
@@ -1321,14 +1323,14 @@ function drawChart(ctx,totalsShown,labels,W,H){
   ctx.globalAlpha=1;
 
   // Labels
-  ctx.font='10px Consolas,monospace';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.font=`${10*textScale}px Consolas,monospace`;ctx.textAlign='center';ctx.textBaseline='top';
   for(let i=0;i<n;i++){ctx.save();ctx.translate(toX(i),cY+cH+8);ctx.rotate(Math.PI*0.15);
     ctx.fillStyle=GRAY;ctx.globalAlpha=0.7;ctx.fillText((labels[i]||'').substring(0,7),0,0);ctx.restore();}
 
   // Values
-  ctx.font='bold 10px Consolas,monospace';ctx.textBaseline='bottom';
+  ctx.font=`bold ${10*textScale}px Consolas,monospace`;ctx.textBaseline='bottom';
   for(let i=1;i<n;i++){ctx.fillStyle=vals[i]<0?RED_LIGHT:GOLD_LIGHT;ctx.globalAlpha=0.8;
-    ctx.fillText(vals[i].toFixed(1),toX(i),toY(vals[i])-14);}
+    ctx.fillText(vals[i].toFixed(1),toX(i),toY(vals[i])-(14*textScale));}
   ctx.globalAlpha=1;
 }
 
@@ -1375,22 +1377,23 @@ function computeFundingStatus(transactions,activeMembers){
 }
 
 function drawFundingStatusPanel(ctx,summary,W,H,alpha){
+  const textScale=W<700?1.28:W<980?1.1:1;
   if(!summary){
     ctx.globalAlpha=alpha*0.7;
-    glowText(ctx,"Add active_members.csv to show round balances",W/2,H*0.55,`bold ${Math.min(20,W*0.016)}px 'Rajdhani',sans-serif`,CYAN,alpha,0.35);
+    glowText(ctx,"Add active_members.csv to show round balances",W/2,H*0.55,`bold ${Math.min(20*textScale,W*0.02)}px 'Rajdhani',sans-serif`,CYAN,alpha,0.35);
     ctx.globalAlpha=1;
     return;
   }
 
-  const titleSize=Math.min(22,W*0.017);
-  const metaSize=Math.min(14,W*0.011);
+  const titleSize=Math.min(22*textScale,W*0.022);
+  const metaSize=Math.min(14*textScale,W*0.015);
   glowText(ctx,`ROUND STATUS  |  R${summary.currentRound}`,W/2,H*0.52,`bold ${titleSize}px Orbitron,Consolas,monospace`,CYAN,alpha,0.45);
   glowText(ctx,`${summary.synced.length} aligned | ${summary.ahead.length} ahead | ${summary.behind.length} pending`,W/2,H*0.555,`${metaSize}px 'Rajdhani',sans-serif`,GRAY,alpha*0.9,0.15);
 
   const panelY=H*0.585;
-  const panelH=Math.min(140,H*0.17);
+  const panelH=Math.min(152,H*(W<700?0.2:0.17));
   const gap=W*0.03;
-  const panelW=Math.min(360,W*0.34);
+  const panelW=Math.min(W<700?310:360,W*(W<700?0.42:0.34));
   const leftX=W/2-gap/2-panelW;
   const rightX=W/2+gap/2;
 
@@ -1398,13 +1401,13 @@ function drawFundingStatusPanel(ctx,summary,W,H,alpha){
     ctx.globalAlpha=alpha*0.88;ctx.fillStyle='#090d1f';ctx.strokeStyle=color;ctx.lineWidth=1.5;
     ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);
     ctx.globalAlpha=alpha;
-    glowText(ctx,title,x+w/2,y+18,`bold ${Math.min(16,W*0.012)}px Orbitron,Consolas,monospace`,color,alpha,0.35);
+    glowText(ctx,title,x+w/2,y+18,`bold ${Math.min(16*textScale,W*0.016)}px Orbitron,Consolas,monospace`,color,alpha,0.35);
 
     const rowY=y+38;
-    const rowH=22;
+    const rowH=24*textScale;
     const visible=rows.slice(0,4);
     if(!visible.length){
-      ctx.font=`${Math.min(15,W*0.011)}px 'Rajdhani',sans-serif`;
+      ctx.font=`${Math.min(15*textScale,W*0.015)}px 'Rajdhani',sans-serif`;
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle=GRAY;ctx.globalAlpha=alpha*0.9;
       ctx.fillText(emptyText,x+w/2,y+h/2+8);ctx.globalAlpha=1;
@@ -1416,16 +1419,16 @@ function drawFundingStatusPanel(ctx,summary,W,H,alpha){
       ctx.globalAlpha=alpha*(0.08+(index%2)*0.03);ctx.fillStyle='#ffffff';
       ctx.fillRect(x+10,yy-10,w-20,18);
       ctx.globalAlpha=alpha;ctx.textAlign='left';ctx.textBaseline='middle';
-      ctx.font=`bold ${Math.min(16,W*0.012)}px 'Rajdhani',sans-serif`;ctx.fillStyle='#F7F0E0';
+      ctx.font=`bold ${Math.min(16*textScale,W*0.016)}px 'Rajdhani',sans-serif`;ctx.fillStyle='#F7F0E0';
       ctx.fillText(row.who,x+18,yy);
-      ctx.textAlign='right';ctx.font=`${Math.min(13,W*0.01)}px Orbitron,Consolas,monospace`;ctx.fillStyle=color;
+      ctx.textAlign='right';ctx.font=`${Math.min(13*textScale,W*0.013)}px Orbitron,Consolas,monospace`;ctx.fillStyle=color;
       const rounds=Math.abs(row.deltaRounds);
       ctx.fillText(`${row.delta>0?'+':'-'}${Math.abs(row.delta).toFixed(0)} CHF  |  ${rounds.toFixed(rounds % 1 ? 1 : 0)}R`,x+w-18,yy);
     });
 
     if(rows.length>visible.length){
       ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.font=`${Math.min(12,W*0.009)}px Orbitron,Consolas,monospace`;ctx.fillStyle=GRAY;ctx.globalAlpha=alpha*0.85;
+      ctx.font=`${Math.min(12*textScale,W*0.012)}px Orbitron,Consolas,monospace`;ctx.fillStyle=GRAY;ctx.globalAlpha=alpha*0.85;
       ctx.fillText(`+ ${rows.length-visible.length} more`,x+w/2,y+h-12);ctx.globalAlpha=1;
     }
   }
@@ -1448,6 +1451,7 @@ function startAnimation(transactions,activeMembers=[]) {
   function resize(){canvas.width=innerWidth;canvas.height=innerHeight}
   addEventListener('resize',resize);resize();
   const W=()=>canvas.width,H=()=>canvas.height;
+  const uiScale=()=>W()<700?1.34:W()<980?1.12:1;
 
   const particles=new ParticleSystem();
   const stars=new StarField(350,2560,1440);
@@ -1500,7 +1504,7 @@ function startAnimation(transactions,activeMembers=[]) {
     const txt=title.substring(0,nC);
     if(f>25&&f<=130){const prev=Math.min(title.length,Math.floor(title.length*Math.min(1,(f-1)/110)));if(nC>prev)audio.tick();}
 
-    const fontSize=Math.min(95,w*0.065);
+    const fontSize=Math.min(95*uiScale(),w*0.082);
     if(f<150){
       if(txt){
         const alpha=Math.min(1,f/45);const gi=1+0.4*Math.sin(f*0.1);
@@ -1528,15 +1532,15 @@ function startAnimation(transactions,activeMembers=[]) {
     }
 
     // Subtitle
-    if(f>120){const a=Math.min(1,(f-120)/40);const fs=Math.min(22,w*0.016);
+    if(f>120){const a=Math.min(1,(f-120)/40);const fs=Math.min(22*uiScale(),w*0.021);
       glowText(ctx,"THE EPIC STORY OF YOUR SHARED MONEY",w/2,h*0.52,`italic ${fs}px 'Rajdhani',sans-serif`,'#8888aa',a,0.3);}
 
     // Count
-    if(f>170){const a=Math.min(0.7,(f-170)/40);const fs=Math.min(16,w*0.012);
+    if(f>170){const a=Math.min(0.7,(f-170)/40);const fs=Math.min(16*uiScale(),w*0.016);
       glowText(ctx,`${transactions.length} TRANSACTIONS LOADED`,w/2,h*0.58,`bold ${fs}px Orbitron,Consolas,monospace`,CYAN,a,0.4);}
 
     // Chapter
-    if(f>210){const a=Math.min(0.6,(f-210)/30);const fs=Math.min(13,w*0.009);
+    if(f>210){const a=Math.min(0.6,(f-210)/30);const fs=Math.min(13*uiScale(),w*0.012);
       glowText(ctx,"CHAPTER I",w/2,h*0.63,`${fs}px Consolas,monospace`,GRAY,a,0.2);}
 
     // Ambient
@@ -1584,11 +1588,11 @@ function startAnimation(transactions,activeMembers=[]) {
     if(f<45)drawSpeedLines(ctx,w,h,(1-f/45)*1.05,col);
 
     // Header
-    const hdrS=Math.min(22,w*0.015);
+    const hdrS=Math.min(22*uiScale(),w*0.02);
     glowText(ctx,"THE COMMON FUND",w/2,h*0.045,`bold ${hdrS}px Cinzel,Georgia,serif`,GOLD,0.3,0.2);
 
     // Counter
-    ctx.font=`${Math.min(12,w*0.008)}px Orbitron,Consolas,monospace`;
+    ctx.font=`${Math.min(12*uiScale(),w*0.011)}px Orbitron,Consolas,monospace`;
     ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle=CYAN;ctx.globalAlpha=0.5;
     ctx.fillText(`[ ${idx+1} / ${transactions.length} ]`,w*0.96,h*0.045);ctx.globalAlpha=1;ctx.textAlign='center';
 
@@ -1607,7 +1611,7 @@ function startAnimation(transactions,activeMembers=[]) {
     if(f>8){
       const a=Math.min(1,(f-8)/20);
       const dateY=h*0.13;
-      const dateW=Math.min(380,w*0.62),dateH=Math.min(52,h*0.07);
+      const dateW=Math.min(420,w*0.74),dateH=Math.min(58*uiScale(),h*0.082);
       const x=w/2-dateW/2,y=dateY-dateH/2;
 
       // Date plate for stronger visual hierarchy
@@ -1626,7 +1630,7 @@ function startAnimation(transactions,activeMembers=[]) {
       ctx.moveTo(x+dateW-4-cL,y+dateH-4);ctx.lineTo(x+dateW-4,y+dateH-4);ctx.lineTo(x+dateW-4,y+dateH-4-cL);
       ctx.stroke();ctx.globalAlpha=1;
 
-      const fs=Math.min(30,w*0.022);
+      const fs=Math.min(32*uiScale(),w*0.03);
       glowText(ctx,`[ ${tx.date} ]`,w/2,dateY,`bold ${fs}px Orbitron,Consolas,monospace`,colL,a,0.75);
       if(f<75){
         const fi=Math.min(0.65,(f-8)/40)*(0.55+0.35*Math.sin(f*0.12));
@@ -1638,7 +1642,7 @@ function startAnimation(transactions,activeMembers=[]) {
     if(f>20){
       const p=Math.min(1,(f-20)/32);const sc=easeBack(p);
       const name=neg?`>>> ${tx.who.toUpperCase()} <<<`:tx.who.toUpperCase();
-      const gi=1+0.5*Math.sin(f*0.12);const bFS=Math.min(72,w*0.055);const fs=Math.max(8,Math.floor(bFS*sc));
+      const gi=1+0.5*Math.sin(f*0.12);const bFS=Math.min(72*uiScale(),w*0.072);const fs=Math.max(10,Math.floor(bFS*sc));
       if(neg&&f>28&&f<90&&Math.random()<0.35)
         glitchText(ctx,name,w/2,h*0.25,`bold ${fs}px 'Rajdhani',sans-serif`,col,Math.min(1,p*1.5),1-(f-28)/62);
       else glowText(ctx,name,w/2,h*0.25,`bold ${fs}px 'Rajdhani',sans-serif`,col,Math.min(1,p*1.5),gi,neg);
@@ -1648,20 +1652,20 @@ function startAnimation(transactions,activeMembers=[]) {
     // Amount
     if(f>45){
       const ap=Math.min(1,(f-45)/24);const cp=Math.min(1,(f-45)/50);const amt=tx.amount*easeOut(cp);
-      const sign=amt>=0?"+":"";const fs=Math.min(52,w*0.04);
+      const sign=amt>=0?"+":"";const fs=Math.min(58*uiScale(),w*0.052);
       glowText(ctx,`${sign}${amt.toFixed(2)} CHF`,w/2,h*0.38,`bold ${fs}px Orbitron,Consolas,monospace`,col,easeOut(ap),0.9,neg);
     }
 
     // Total
     if(f>70){
-      const ta=Math.min(1,(f-70)/24);const tc=displayTotal<0?RED:GREEN;const fs=Math.min(38,w*0.03);
+      const ta=Math.min(1,(f-70)/24);const tc=displayTotal<0?RED:GREEN;const fs=Math.min(44*uiScale(),w*0.04);
       glowText(ctx,`TOTAL: ${displayTotal.toFixed(2)} CHF`,w/2,h*0.49,`bold ${fs}px Orbitron,Consolas,monospace`,tc,ta,0.7);
       if(displayTotal>0&&f>90){const fi=Math.min(0.5,(f-90)/40)*(0.3+0.2*Math.sin(f*0.06));drawLensFlare(ctx,w/2,h*0.49,fi,GREEN);}
     }
 
     // DANGER ZONE
     if(tx.total<0&&f>85&&f<160){
-      const pulse=0.4+0.5*Math.sin(f*0.18);const fs=Math.min(26,w*0.02);
+      const pulse=0.4+0.5*Math.sin(f*0.18);const fs=Math.min(30*uiScale(),w*0.028);
       // Red vignette
       const rG=ctx.createRadialGradient(w/2,h*0.35,0,w/2,h*0.35,Math.min(w,h)*0.6);
       rG.addColorStop(0,'transparent');rG.addColorStop(1,RED+'22');
@@ -1694,14 +1698,14 @@ function startAnimation(transactions,activeMembers=[]) {
     drawAurora(ctx,w,h,f/FPS+100);
 
     // Header
-    const hdrS=Math.min(22,w*0.015);
+    const hdrS=Math.min(22*uiScale(),w*0.02);
     glowText(ctx,"THE COMMON FUND",w/2,h*0.045,`bold ${hdrS}px Cinzel,Georgia,serif`,GOLD,0.35,0.2);
 
     // Speed lines
     if(f<50)drawSpeedLines(ctx,w,h,(1-f/50)*0.6,GOLD);
 
     // Label
-    if(f>18){const a=Math.min(1,(f-18)/40);const fs=Math.min(24,w*0.018);
+    if(f>18){const a=Math.min(1,(f-18)/40);const fs=Math.min(26*uiScale(),w*0.026);
       glowText(ctx,"—  CURRENT TOTAL  —",w/2,h*0.15,`bold ${fs}px 'Rajdhani',sans-serif`,GOLD_DIM,a,0.5);}
 
     // Big number
@@ -1709,13 +1713,13 @@ function startAnimation(transactions,activeMembers=[]) {
       const cp=Math.min(1,(f-45)/100);const val=finalTotal*easeOut(cp);
       const sc=easeElastic(Math.min(1,(f-45)/80));
       const gi=2.2+1*Math.sin(f*0.06);
-      const bFS=Math.min(130,w*0.09);const fs=Math.max(10,Math.floor(bFS*sc));
+      const bFS=Math.min(140*uiScale(),w*0.12);const fs=Math.max(12,Math.floor(bFS*sc));
       glowText(ctx,`${val.toFixed(2)} CHF`,w/2,h*0.30,`900 ${fs}px Orbitron,Consolas,monospace`,GOLD,1,gi);
       if(f>90){const fi=Math.min(1.5,(f-90)/50)*(0.7+0.3*Math.sin(f*0.05));drawLensFlare(ctx,w/2,h*0.30,fi,GOLD);}
     }
 
     // Motivational
-    if(f>200){const a=Math.min(1,(f-200)/55);const fs=Math.min(32,w*0.024);const pulse=1+0.25*Math.sin(f*0.04);
+    if(f>200){const a=Math.min(1,(f-200)/55);const fs=Math.min(36*uiScale(),w*0.032);const pulse=1+0.25*Math.sin(f*0.04);
       glowText(ctx,"THE FUND KEEPS GROWING",w/2,h*0.46,`bold ${fs}px 'Rajdhani',sans-serif`,GREEN,a,0.8*pulse);}
 
     // Funding round status
@@ -1753,7 +1757,7 @@ function startAnimation(transactions,activeMembers=[]) {
     if(f>90&&f%6===0)particles.ember(4,w,h);
 
     // Hint
-    if(f>400){const a=Math.min(0.5,(f-400)/60);const fs=Math.min(13,w*0.009);
+    if(f>400){const a=Math.min(0.5,(f-400)/60);const fs=Math.min(14*uiScale(),w*0.013);
       ctx.font=`italic ${fs}px 'Rajdhani',sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle=GRAY;ctx.globalAlpha=a;
       ctx.fillText('Update fondo.csv and active_members.csv, then reload to continue the saga...',w/2,h*0.69);ctx.globalAlpha=1;}
